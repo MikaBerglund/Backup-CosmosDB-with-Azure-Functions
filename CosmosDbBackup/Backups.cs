@@ -18,10 +18,11 @@ namespace CosmosDbBackup
 
             foreach(var coll in collections)
             {
-                var jobDef = new CollectionBackupJob()
+                var jobDef = new CollectionBackupJob(context.CurrentUtcDateTime)
                 {
                     ConnectionString = AppSettings.Current.ConnectionString,
-                    CollectionLink = coll
+                    CollectionLink = coll,
+                    ContainerName = AppSettings.Current.ContainerName
                 };
 
                 await context.CallSubOrchestratorAsync(Names.BackupCollection, jobDef);

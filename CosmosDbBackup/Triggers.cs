@@ -43,7 +43,8 @@ namespace CosmosDbBackup
                 await client.StartNewAsync(Names.FullBackupMain, FullBackupId, null);
                 return true;
             }
-
+            
+            log.LogWarning($"A previous backup job is still in progress. Cannot start a new job. Current job - Status: '{status.RuntimeStatus}', instance ID: '{status.InstanceId}'.");
             return false;
         }
     }

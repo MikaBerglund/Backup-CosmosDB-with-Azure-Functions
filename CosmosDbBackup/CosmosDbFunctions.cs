@@ -1,10 +1,13 @@
-﻿using Microsoft.Azure.Documents.Client;
+﻿using Microsoft.Azure.Documents;
+using Microsoft.Azure.Documents.Client;
 using Microsoft.Azure.Documents.Linq;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,6 +49,19 @@ namespace CosmosDbBackup
             var client = await GetClientAsync(jobDef.ConnectionString);
             
             log.LogInformation($"Initializing backup for {client.ServiceEndpoint.Host} | {jobDef.CollectionLink}.");
+
+            using (var query = client.CreateDocumentQuery(jobDef.CollectionLink, new FeedOptions() { EnableCrossPartitionQuery = true }).AsDocumentQuery())
+            {
+                FeedResponse<Document> response = null;
+                do
+                {
+                    response = await query.ExecuteNextAsync<Document>();
+                    foreach (var doc in response)
+                    {
+                        JsonConvert.SerializeObject(doc);
+                    }
+                } while (null != response && query.HasMoreResults);
+            }
         }
 
 
