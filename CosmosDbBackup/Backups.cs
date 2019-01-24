@@ -14,8 +14,18 @@ namespace CosmosDbBackup
         [FunctionName(Names.FullBackupMain)]
         public static async Task FullBackupMain([OrchestrationTrigger]DurableOrchestrationContext context, ILogger log)
         {
-            var collections = await context.CallActivityAsync<IEnumerable<Uri>>(Names.EnumCollections, AppSettings.ConnectionString);
+            var collections = await context.CallActivityAsync<IEnumerable<Uri>>(Names.EnumCollections, AppSettings.Current.ConnectionString);
 
+            foreach(var coll in collections)
+            {
+                var jobDef = new CollectionBackupJob()
+                {
+                    ConnectionString = AppSettings.Current.ConnectionString,
+                    CollectionLink = coll
+                };
+
+                await context.CallSubOrchestratorAsync(Names.BackupCollection, jobDef);
+            }
         }
 
     }

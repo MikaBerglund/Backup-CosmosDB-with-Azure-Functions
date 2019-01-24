@@ -7,23 +7,24 @@ namespace CosmosDbBackup
     /// <summary>
     /// Provides typed access to the configuration variables.
     /// </summary>
-    public static class AppSettings
+    public class AppSettings
     {
 
-        public static string AzureWebJobsStorage
+        private AppSettings()
         {
-            get { return Environment.GetEnvironmentVariable("AzureWebJobsStorage"); }
+            this.AzureWebJobsStorage = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+            this.ConnectionString = Environment.GetEnvironmentVariable("ConnectionString");
+            this.ContainerName = Environment.GetEnvironmentVariable("ContainerName");
         }
 
-        public static string ConnectionString
-        {
-            get { return Environment.GetEnvironmentVariable("ConnectionString"); }
-        }
+        public static AppSettings Current { get; } = new AppSettings();
 
-        public static string ContainerName
-        {
-            get { return Environment.GetEnvironmentVariable("ContainerName"); }
-        }
+
+        public string AzureWebJobsStorage { get; private set; }
+
+        public string ConnectionString { get; private set; }
+
+        public string ContainerName { get; private set; }
 
     }
 }

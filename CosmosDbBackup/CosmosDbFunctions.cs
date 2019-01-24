@@ -39,6 +39,14 @@ namespace CosmosDbBackup
             return list;
         }
 
+        [FunctionName(Names.BackupCollection)]
+        public static async Task BackupCollection([OrchestrationTrigger]DurableOrchestrationContext context, ILogger log)
+        {
+            var jobDef = context.GetInput<CollectionBackupJob>();
+            var client = await GetClientAsync(jobDef.ConnectionString);
+            
+            log.LogInformation($"Initializing backup for {client.ServiceEndpoint.Host} | {jobDef.CollectionLink}.");
+        }
 
 
         /// <summary>
