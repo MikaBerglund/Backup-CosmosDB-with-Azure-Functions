@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Microsoft.Azure.Documents;
+using Microsoft.Azure.Documents.Client;
 
 namespace CosmosDbBackup
 {
@@ -28,6 +30,12 @@ namespace CosmosDbBackup
         /// The orchestration function that takes care of backing up the given Cosmos DB collection. The input must be an instance of the <see cref="CollectionBackupJob"/> type.
         /// </summary>
         public const string BackupCollection = nameof(BackupCollection);
+
+        /// <summary>
+        /// The activity function that returns documents from a document collection. The input must be a <see cref="DocumentRequest"/> type, and 
+        /// the function returns an instance of the <see cref="DocumentResponse"/>
+        /// </summary>
+        public const string GetDocumentsToBackUp = nameof(GetDocumentsToBackUp);
 
     }
 }

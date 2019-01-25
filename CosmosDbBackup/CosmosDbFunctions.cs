@@ -26,16 +26,23 @@ namespace CosmosDbBackup
 
             var client = await GetClientAsync(connectionString);
 
-            var dbQuery = client.CreateDatabaseQuery().AsDocumentQuery();
-            var databases = await ExecuteAllAsync(dbQuery);
-            
-            foreach(var db in databases)
+            using (var dbQuery = client.CreateDatabaseQuery().AsDocumentQuery())
             {
-                var collQuery = client.CreateDocumentCollectionQuery(UriFactory.CreateDatabaseUri(db.Id)).AsDocumentQuery();
-                var collections = await ExecuteAllAsync(collQuery);
-                foreach(var coll in collections)
+                while (dbQuery.HasMoreResults)
                 {
-                    list.Add(UriFactory.CreateDocumentCollectionUri(db.Id, coll.Id));
+                    foreach (var db in await dbQuery.ExecuteNextAsync<Database>())
+                    {
+                        using (var collQuery = client.CreateDocumentCollectionQuery(UriFactory.CreateDatabaseUri(db.Id)).AsDocumentQuery())
+                        {
+                            while (collQuery.HasMoreResults)
+                            {
+                                foreach (var coll in await collQuery.ExecuteNextAsync<DocumentCollection>())
+                                {
+                                    list.Add(UriFactory.CreateDocumentCollectionUri(db.Id, coll.Id));
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -50,20 +57,52 @@ namespace CosmosDbBackup
             
             log.LogInformation($"Initializing backup for {client.ServiceEndpoint.Host} | {jobDef.CollectionLink}.");
 
-            using (var query = client.CreateDocumentQuery(jobDef.CollectionLink, new FeedOptions() { EnableCrossPartitionQuery = true }).AsDocumentQuery())
+            var request = new DocumentRequest()
             {
-                FeedResponse<Document> response = null;
-                do
+                CollectionLink = jobDef.CollectionLink,
+                ConnectionString = jobDef.ConnectionString
+            };
+
+            do
+            {
+                try
                 {
-                    response = await query.ExecuteNextAsync<Document>();
-                    foreach (var doc in response)
-                    {
-                        JsonConvert.SerializeObject(doc);
-                    }
-                } while (null != response && query.HasMoreResults);
+                    var response = await context.CallActivityAsync<DocumentResponse>(Names.GetDocumentsToBackUp, request);
+                    request.ContinuationToken = response.ContinuationToken;
+                }
+                catch (Exception ex)
+                {
+                    var msg = ex.Message;
+                }
             }
+            while (null != request.ContinuationToken);
         }
 
+        [FunctionName(Names.GetDocumentsToBackUp)]
+        public static async Task<DocumentResponse> GetDocumentsToBackUp([ActivityTrigger]DurableActivityContext context, ILogger log)
+        {
+            var request = context.GetInput<DocumentRequest>();
+
+            var client = await GetClientAsync(request.ConnectionString);
+            DocumentResponse response = null;
+
+            using (
+                var query = client.CreateDocumentQuery(
+                    request.CollectionLink, 
+                    new FeedOptions() { EnableCrossPartitionQuery = true, RequestContinuation = request.ContinuationToken }
+                ).AsDocumentQuery()
+            )
+            {
+                var result = await query.ExecuteNextAsync<Document>();
+                response = new DocumentResponse()
+                {
+                    ContinuationToken = result.ResponseContinuation,
+                    Documents = result.ToList()
+                };
+            }
+
+            return response;
+        }
 
         /// <summary>
         /// Executes a document query and returns all results for that query. Use with caution where the result set can potentially be very large.
@@ -72,17 +111,10 @@ namespace CosmosDbBackup
         {
             var list = new List<T>();
 
-            string token = null;
-            do
+            while (query.HasMoreResults)
             {
-                var response = await query.ExecuteNextAsync<T>();
-                if(null != response)
-                {
-                    list.AddRange(response);
-                }
-                token = response?.ResponseContinuation;
+                list.AddRange(await query.ExecuteNextAsync<T>());
             }
-            while (null != token);
             
             return list;
         }
@@ -99,14 +131,9 @@ namespace CosmosDbBackup
             await clientLock.WaitAsync();
             try
             {
-                if(!clients.ContainsKey(connectionString))
+                if (!clients.ContainsKey(connectionString))
                 {
-                    var builder = new DbConnectionStringBuilder() { ConnectionString = connectionString };
-                    var endpoint = (string)builder["AccountEndpoint"];
-                    var key = (string)builder["AccountKey"];
-
-                    var client = new DocumentClient(new Uri(endpoint), key);
-                    clients[connectionString] = client;
+                    clients[connectionString] = CreateNewClient(connectionString);
                 }
             }
             finally
@@ -115,6 +142,16 @@ namespace CosmosDbBackup
             }
 
             return clients[connectionString];
+        }
+
+        private static DocumentClient CreateNewClient(string connectionString)
+        {
+            var builder = new DbConnectionStringBuilder() { ConnectionString = connectionString };
+            var endpoint = (string)builder["AccountEndpoint"];
+            var key = (string)builder["AccountKey"];
+
+            var client = new DocumentClient(new Uri(endpoint), key);
+            return client;
         }
 
     }
