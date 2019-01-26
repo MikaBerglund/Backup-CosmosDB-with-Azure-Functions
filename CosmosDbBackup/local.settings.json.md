@@ -10,14 +10,28 @@ The contents of the file should be:
     "IsEncrypted": false,
     "Values": {
         "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-        "FUNCTIONS_WORKER_RUNTIME": "dotnet",
-
-        "ConnectionString": "<Your Cosmos DB connection string>",
+        "FUNCTIONS_WORKER_RUNTIME": "dotnet"
 
         // A CRON expression defining when to do full backups.
         "FullBackupSchedule": "0 0 0 */1 * *",
 
-        "ContainerName": "<The name of the container to store backups in.>"
+        // The name of the storage container to use for backups.
+        "ContainerName": "cosmos-backups",
+        
+        // An array of connection strings serialized to a JSON string.
+        "ConnectionStrings": "[\"string 1\", \"string 2\"]"
+    },
+    
+    "CosmosBackup": {
+        
+        
+        // An array of Cosmos DB Accounts to back up.
+        "Accounts": [
+            {
+                // The connection string to the account to back up.
+                "ConnectionString": string
+            }
+        ]
     }
 }
 ```

@@ -27,15 +27,9 @@ namespace CosmosDbBackup
         public const string EnumCollections = nameof(EnumCollections);
 
         /// <summary>
-        /// The orchestration function that takes care of backing up the given Cosmos DB collection. The input must be an instance of the <see cref="CollectionBackupJob"/> type.
+        /// The activity function that takes care of backing up all documents in a collection. The input must be an instance of type <see cref="CollectionBackupJob"/>.
         /// </summary>
-        public const string BackupCollection = nameof(BackupCollection);
-
-        /// <summary>
-        /// The activity function that returns documents from a document collection. The input must be a <see cref="DocumentRequest"/> type, and 
-        /// the function returns an instance of the <see cref="DocumentResponse"/>
-        /// </summary>
-        public const string GetDocumentsToBackUp = nameof(GetDocumentsToBackUp);
+        public const string BackupDocuments = nameof(BackupDocuments);
 
     }
 }

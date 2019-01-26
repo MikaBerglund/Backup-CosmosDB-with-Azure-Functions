@@ -1,8 +1,9 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace CosmosDbBackup
+namespace CosmosDbBackup.Configuration
 {
     /// <summary>
     /// Provides typed access to the configuration variables.
@@ -13,8 +14,8 @@ namespace CosmosDbBackup
         private AppSettings()
         {
             this.AzureWebJobsStorage = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
-            this.ConnectionString = Environment.GetEnvironmentVariable("ConnectionString");
             this.ContainerName = Environment.GetEnvironmentVariable("ContainerName");
+
         }
 
         public static AppSettings Current { get; } = new AppSettings();
@@ -22,9 +23,12 @@ namespace CosmosDbBackup
 
         public string AzureWebJobsStorage { get; private set; }
 
-        public string ConnectionString { get; private set; }
-
         public string ContainerName { get; private set; }
 
+        private string[] _ConnectionStrings;
+        public string[] ConnectionStrings { get; private set; }
+
+
     }
+
 }

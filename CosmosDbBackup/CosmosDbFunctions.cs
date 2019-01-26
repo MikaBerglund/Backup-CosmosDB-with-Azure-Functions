@@ -3,6 +3,8 @@ using Microsoft.Azure.Documents.Client;
 using Microsoft.Azure.Documents.Linq;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
+using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -49,75 +51,36 @@ namespace CosmosDbBackup
             return list;
         }
 
-        [FunctionName(Names.BackupCollection)]
-        public static async Task BackupCollection([OrchestrationTrigger]DurableOrchestrationContext context, ILogger log)
+        [FunctionName(Names.BackupDocuments)]
+        public static async Task BackupDocuments([ActivityTrigger]DurableActivityContext context, ILogger log)
         {
             var jobDef = context.GetInput<CollectionBackupJob>();
             var client = await GetClientAsync(jobDef.ConnectionString);
-            
+
             log.LogInformation($"Initializing backup for {client.ServiceEndpoint.Host} | {jobDef.CollectionLink}.");
 
-            var request = new DocumentRequest()
-            {
-                CollectionLink = jobDef.CollectionLink,
-                ConnectionString = jobDef.ConnectionString
-            };
+            var dir = await GetDirectoryAsync(jobDef);
 
-            do
+            using(var query = client.CreateDocumentQuery(jobDef.CollectionLink, new FeedOptions() { EnableCrossPartitionQuery = true }).AsDocumentQuery())
             {
-                try
+                while(query.HasMoreResults)
                 {
-                    var response = await context.CallActivityAsync<DocumentResponse>(Names.GetDocumentsToBackUp, request);
-                    request.ContinuationToken = response.ContinuationToken;
+                    foreach(var doc in await query.ExecuteNextAsync<Document>())
+                    {
+                        var json = JsonConvert.SerializeObject(doc);
+
+                        var docRef = dir.GetBlockBlobReference($"{doc.Id}.{doc.ResourceId}.json");
+                        
+                        await docRef.UploadTextAsync(json);
+
+                        log.LogMetric("Document.BackedUp", 1);
+                        log.LogInformation($"Backed up '{docRef.StorageUri.PrimaryUri}'");
+                    }
                 }
-                catch (Exception ex)
-                {
-                    var msg = ex.Message;
-                }
             }
-            while (null != request.ContinuationToken);
         }
 
-        [FunctionName(Names.GetDocumentsToBackUp)]
-        public static async Task<DocumentResponse> GetDocumentsToBackUp([ActivityTrigger]DurableActivityContext context, ILogger log)
-        {
-            var request = context.GetInput<DocumentRequest>();
 
-            var client = await GetClientAsync(request.ConnectionString);
-            DocumentResponse response = null;
-
-            using (
-                var query = client.CreateDocumentQuery(
-                    request.CollectionLink, 
-                    new FeedOptions() { EnableCrossPartitionQuery = true, RequestContinuation = request.ContinuationToken }
-                ).AsDocumentQuery()
-            )
-            {
-                var result = await query.ExecuteNextAsync<Document>();
-                response = new DocumentResponse()
-                {
-                    ContinuationToken = result.ResponseContinuation,
-                    Documents = result.ToList()
-                };
-            }
-
-            return response;
-        }
-
-        /// <summary>
-        /// Executes a document query and returns all results for that query. Use with caution where the result set can potentially be very large.
-        /// </summary>
-        private static async Task<IEnumerable<T>> ExecuteAllAsync<T>(IDocumentQuery<T> query)
-        {
-            var list = new List<T>();
-
-            while (query.HasMoreResults)
-            {
-                list.AddRange(await query.ExecuteNextAsync<T>());
-            }
-            
-            return list;
-        }
 
         private static SemaphoreSlim clientLock = new SemaphoreSlim(1, 1);
         private static Dictionary<string, DocumentClient> clients = new Dictionary<string, DocumentClient>();
@@ -152,6 +115,33 @@ namespace CosmosDbBackup
 
             var client = new DocumentClient(new Uri(endpoint), key);
             return client;
+        }
+
+        private static async Task<CloudBlobDirectory> GetDirectoryAsync(CollectionBackupJob jobDef)
+        {
+            var client = await GetClientAsync(jobDef.ConnectionString);
+            var storage = CloudStorageAccount.Parse(AppSettings.Current.AzureWebJobsStorage);
+            var blobs = storage.CreateCloudBlobClient();
+            var container = blobs.GetContainerReference(jobDef.ContainerName.ToLower());
+            await container.CreateIfNotExistsAsync();
+
+            // The collection URI is always 'dbs/[name of db]/colls/[name of collection]' so the
+            // db is item 1 and collection is item 3 when splitting by '/'.
+            var arr = jobDef.CollectionLink.OriginalString.Split('/');
+
+            CloudBlobDirectory dir = container
+                .GetDirectoryReference(client.ServiceEndpoint.Host)
+                .GetDirectoryReference(arr[1])
+                .GetDirectoryReference(arr[3])
+                .GetDirectoryReference(jobDef.Timestamp.ToString("yyyyMMdd-HHmmss"))
+                ;
+
+            return dir;
+        }
+
+        private static async Task StoreDocumentAsync(CloudBlobContainer container, Document doc)
+        {
+
         }
 
     }
