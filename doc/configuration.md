@@ -34,6 +34,8 @@ The following settings are added for each database and / or collection you want 
   
 - `CosmosBackup:Accounts:0:CollectionId`: The ID of the collection to back up. If not specified, then all collections are backed up.
 
+Please note that you need to increment the index count for each database/collection you want backed up.
+
 
 Disclaimer
 ----------
