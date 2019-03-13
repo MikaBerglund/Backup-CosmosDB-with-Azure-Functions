@@ -26,7 +26,7 @@ The settings below are to configure the backup application.
   
 - `CosmosBackup:DefaultConnectionString`: The default connection string to the Cosmos DB account to back up. If not specified, then the connection string must be specified for each account specified in the `CosmosBackup:Accounts` array described below.
 
-The following settings are added for each database and / or collection you want to include in the backup. If none are specified, then all databases and all collections found by using the default connection string `CosmosBackup:DefaultConnectionString` are backed up.
+The following settings are added for each database and / or collection you want to include in the backup. If none are specified, then all databases and all collections found by using the default connection string are backed up.
 
 - `CosmosBackup:Accounts:0:ConnectionString`: The connection string to the Cosmos DB account to back up. If not specified, `CosmosBackup:DefaultConnectionString` is used.
   
