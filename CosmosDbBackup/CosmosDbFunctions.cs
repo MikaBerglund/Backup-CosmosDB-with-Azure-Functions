@@ -27,7 +27,9 @@ namespace CosmosDbBackup
             var jobDef = context.GetInput<CollectionBackupJob>();
             var client = await GetClientAsync(jobDef.ConnectionString);
 
-            log.LogInformation($"Initializing backup for {client.ServiceEndpoint.Host} | {jobDef.CollectionLink}.");
+            var name = $"{client.ServiceEndpoint.Host} | {jobDef.CollectionLink}";
+
+            log.LogInformation($"Initializing backup for {name}.");
 
             var dir = await GetDirectoryAsync(jobDef);
 
@@ -44,10 +46,11 @@ namespace CosmosDbBackup
                         await docRef.UploadTextAsync(json);
 
                         log.LogMetric("Document.BackedUp", 1);
-                        log.LogInformation($"Backed up '{docRef.StorageUri.PrimaryUri}'");
                     }
                 }
             }
+
+            log.LogInformation($"Completed backup for {name}.");
         }
 
         [FunctionName(Names.ResolveCollectionBackupJobs)]
