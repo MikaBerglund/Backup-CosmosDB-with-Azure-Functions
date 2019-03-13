@@ -7,12 +7,14 @@ using System.Threading.Tasks;
 using System.Net.Http;
 using System.Net;
 using CosmosDbBackup.Configuration;
+using Microsoft.Azure.WebJobs.Extensions.Http;
 
 namespace CosmosDbBackup
 {
     public static class Triggers
     {
 
+        // We always use the same ID for full backup, so we know if there is a running full backup already.
         private const string FullBackupId = "805f7dee-d9d3-4e67-973c-2a977d9c50ac";
 
         [FunctionName(Names.FullBackupTimer)]
@@ -21,16 +23,16 @@ namespace CosmosDbBackup
             await StartFullBackupMain(client, log);
         }
 
-#if DEBUG
         [FunctionName(Names.FullBackupHttpTrigger)]
-        public static async Task<HttpResponseMessage> FullBackupHttpTrigger([HttpTrigger]HttpRequestMessage req, [OrchestrationClient]DurableOrchestrationClient client, ILogger log)
+        public static async Task<HttpResponseMessage> FullBackupHttpTrigger([HttpTrigger(AuthorizationLevel.Function)]HttpRequestMessage req, [OrchestrationClient]DurableOrchestrationClient client, ILogger log)
         {
             var config = AppSettings.Current;
 
             var status = await StartFullBackupMain(client, log);
             return req.CreateResponse(status ? HttpStatusCode.Accepted : HttpStatusCode.Conflict);
         }
-#endif
+
+
 
         private static async Task<bool> StartFullBackupMain(DurableOrchestrationClient client, ILogger log)
         {

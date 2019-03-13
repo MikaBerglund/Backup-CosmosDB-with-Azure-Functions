@@ -16,12 +16,19 @@ namespace CosmosDbBackup.Configuration
         private AppSettings()
         {
 
-            var config = new ConfigurationBuilder()
-                .SetBasePath(Environment.GetEnvironmentVariable("AzureWebJobsScriptRoot"))
-                .AddJsonFile("local.settings.json", true, true)
+            IConfigurationBuilder builder = new ConfigurationBuilder();
+
+            var scriptRoot = Environment.GetEnvironmentVariable("AzureWebJobsScriptRoot");
+            if (!string.IsNullOrWhiteSpace(scriptRoot))
+            {
+                builder
+                    .SetBasePath(scriptRoot)
+                    .AddJsonFile("local.settings.json", true, true);
+            }
+
+            var config = builder
                 .AddEnvironmentVariables()
                 .Build();
-
 
             this.AzureWebJobsStorage = config.GetValue<string>("AzureWebJobsStorage");
             this.CosmosBackup = config.GetSection("CosmosBackup").Get<CosmosBackupSettings>();
