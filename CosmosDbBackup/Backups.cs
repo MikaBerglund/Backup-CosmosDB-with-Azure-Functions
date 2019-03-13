@@ -3,6 +3,7 @@ using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -27,6 +28,8 @@ namespace CosmosDbBackup
                     log.LogError(ex, $"Error while backing up collection '{job.CollectionLink}'.");
                 }
             }
+
+            log.LogInformation($"Completed full backup with a total of {jobs.Count()} collections backed up.");
         }
 
     }
