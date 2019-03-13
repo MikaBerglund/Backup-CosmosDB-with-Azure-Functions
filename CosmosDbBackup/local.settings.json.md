@@ -11,39 +11,27 @@ The contents of the file should be:
     "Values": {
         "AzureWebJobsStorage": "UseDevelopmentStorage=true",
         "FUNCTIONS_WORKER_RUNTIME": "dotnet"
-
-        // A CRON expression defining when to do full backups.
-        "FullBackupSchedule": "0 0 0 */1 * *",
-
-        // The name of the storage container to use for backups.
-        "ContainerName": "cosmos-backups",
-        
-        // An array of connection strings serialized to a JSON string.
-        "ConnectionStrings": "[\"string 1\", \"string 2\"]"
     },
     
     "CosmosBackup": {
-        
-        
-        // An array of Cosmos DB Accounts to back up.
+        "FullBackupSchedule": "0 0 0 */1 * *",
+        "BackupStorage": <string>,
+        "ContainerName": "cosmos-backups",
+        "DefaultConnectionString": <string>,
         "Accounts": [
             {
-                // The connection string to the account to back up.
-                "ConnectionString": string
+                "ConnectionString": <string>,
+                "DatabaseId": <string>,
+                "CollectionId": <string>
             }
         ]
     }
 }
 ```
 
+See [configuration](../doc/configuration.md) for more information on these configuration values.
+
 Azure Configuration
 -------------------
 
-When configuring your function application in the [Azure portal](https://portal.azure.com), you use the following configuration values.
-
-- AzureWebJobsStorage
-- FUNCTIONS_WORKER_RUNTIME
-- ConnectionString
-- FullBackupSchedule
-- ContainerName
-
+When you [deploy](../doc/deployment.md) the application to Azure, you don't store the application configuration in a JSON file. Instead, you specify the configuration values for the application on the Azure portal. All necessary configuration is detailed in [configuration](../doc/configuration.md).

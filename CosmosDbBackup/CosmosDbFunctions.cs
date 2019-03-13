@@ -1,4 +1,6 @@
-﻿using Microsoft.Azure.Documents;
+﻿using CosmosDbBackup.Configuration;
+using CosmosDbBackup.FunctionParameters;
+using Microsoft.Azure.Documents;
 using Microsoft.Azure.Documents.Client;
 using Microsoft.Azure.Documents.Linq;
 using Microsoft.Azure.WebJobs;
@@ -18,38 +20,6 @@ namespace CosmosDbBackup
 {
     public static class CosmosDbFunctions
     {
-
-        [FunctionName(Names.EnumCollections)]
-        public static async Task<IEnumerable<Uri>> EnumCollections([ActivityTrigger]DurableActivityContext context, ILogger log)
-        {
-            var connectionString = context.GetInput<string>();
-
-            var list = new List<Uri>();
-
-            var client = await GetClientAsync(connectionString);
-
-            using (var dbQuery = client.CreateDatabaseQuery().AsDocumentQuery())
-            {
-                while (dbQuery.HasMoreResults)
-                {
-                    foreach (var db in await dbQuery.ExecuteNextAsync<Database>())
-                    {
-                        using (var collQuery = client.CreateDocumentCollectionQuery(UriFactory.CreateDatabaseUri(db.Id)).AsDocumentQuery())
-                        {
-                            while (collQuery.HasMoreResults)
-                            {
-                                foreach (var coll in await collQuery.ExecuteNextAsync<DocumentCollection>())
-                                {
-                                    list.Add(UriFactory.CreateDocumentCollectionUri(db.Id, coll.Id));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            return list;
-        }
 
         [FunctionName(Names.BackupDocuments)]
         public static async Task BackupDocuments([ActivityTrigger]DurableActivityContext context, ILogger log)
@@ -80,6 +50,71 @@ namespace CosmosDbBackup
             }
         }
 
+        [FunctionName(Names.ResolveCollectionBackupJobs)]
+        public static async Task<IEnumerable<CollectionBackupJob>> ResolveCollectionBackupJobs([ActivityTrigger]DurableActivityContext context, ILogger logger)
+        {
+            var jobs = new List<CollectionBackupJob>();
+
+            if(null != AppSettings.Current?.CosmosBackup?.Accounts)
+            {
+                foreach(var acc in AppSettings.Current.CosmosBackup.Accounts)
+                {
+                    IEnumerable<string> dbs = null;
+                    if(!string.IsNullOrWhiteSpace(acc.DatabaseId))
+                    {
+                        dbs = new string[] { acc.DatabaseId };
+                    }
+                    else
+                    {
+                        dbs = await EnumDatabasesAsync(acc.ConnectionString);
+                    }
+
+                    foreach (var db in dbs)
+                    {
+                        IEnumerable<string> colls = null;
+
+                        if(string.IsNullOrWhiteSpace(acc.DatabaseId) || string.IsNullOrWhiteSpace(acc.CollectionId))
+                        {
+                            // If database has not been specified (in which case we ignore the collection) or if collection has not been specified, then we enumerate all collection in the current database.
+                            colls = await EnumCollectionsAsync(acc.ConnectionString, db);
+                        }
+                        else
+                        {
+                            // Both database and collection is specified, so we connect only to the specified collection.
+                            colls = new string[] { acc.CollectionId };
+                        }
+
+                        foreach(var coll in colls)
+                        {
+                            jobs.Add(new CollectionBackupJob(DateTime.UtcNow)
+                            {
+                                ConnectionString = acc.ConnectionString,
+                                CollectionLink = UriFactory.CreateDocumentCollectionUri(db, coll),
+                                ContainerName = AppSettings.Current.CosmosBackup.ContainerName,
+                                Storage = AppSettings.Current.CosmosBackup.BackupStorage
+                            });
+                        }
+                    }
+                }
+            }
+            else if(!string.IsNullOrWhiteSpace(AppSettings.Current?.CosmosBackup?.DefaultConnectionString))
+            {
+                // No acounts have been specified, so we process all databases and all collections in default account.
+                var dbs = await EnumDatabasesAsync(AppSettings.Current.CosmosBackup.DefaultConnectionString);
+                foreach(var db in dbs)
+                {
+
+                }
+            }
+            else
+            {
+                logger.LogError("The application is not properly configured. Cannot resolve collections to back up. Please check the configuration for the application.");
+            }
+
+            return jobs;
+        }
+
+
 
 
         private static SemaphoreSlim clientLock = new SemaphoreSlim(1, 1);
@@ -107,6 +142,12 @@ namespace CosmosDbBackup
             return clients[connectionString];
         }
 
+        /// <summary>
+        /// Creates a new client object from the given connection string.
+        /// </summary>
+        /// <remarks>
+        /// Do not call this method directly, but use the <see cref="GetClientAsync(string)"/> method instead. That method caches the client objects to prevent the application from running out of HTTP connections. Not actually sure if this is even necessary...
+        /// </remarks>
         private static DocumentClient CreateNewClient(string connectionString)
         {
             var builder = new DbConnectionStringBuilder() { ConnectionString = connectionString };
@@ -117,10 +158,63 @@ namespace CosmosDbBackup
             return client;
         }
 
+        /// <summary>
+        /// Connects to the account specified in <paramref name="connectionString"/> and database specified in <paramref name="database"/> and returns an array of all collections in that database.
+        /// </summary>
+        private static async Task<IEnumerable<string>> EnumCollectionsAsync(string connectionString, string database)
+        {
+            var list = new List<string>();
+
+            if(!string.IsNullOrWhiteSpace(connectionString))
+            {
+                var client = await GetClientAsync(connectionString);
+                using (var query = client.CreateDocumentCollectionQuery(UriFactory.CreateDatabaseUri(database)).AsDocumentQuery())
+                {
+                    while(query.HasMoreResults)
+                    {
+                        foreach(var c in await query.ExecuteNextAsync<DocumentCollection>())
+                        {
+                            list.Add(c.Id);
+                        }
+                    }
+                }
+            }
+
+            return list;
+        }
+
+        /// <summary>
+        /// Connects to the account specified in <paramref name="connectionString"/> and returns an array of database names.
+        /// </summary>
+        private async static Task<IEnumerable<string>> EnumDatabasesAsync(string connectionString)
+        {
+            var list = new List<string>();
+            if (!string.IsNullOrWhiteSpace(connectionString))
+            {
+                var client = await GetClientAsync(connectionString);
+
+                using (var dbQuery = client.CreateDatabaseQuery().AsDocumentQuery())
+                {
+                    while(dbQuery.HasMoreResults)
+                    {
+                        foreach(var db in await dbQuery.ExecuteNextAsync<Database>())
+                        {
+                            list.Add(db.Id);
+                        }
+                    }
+                }
+            }
+
+            return list;
+        }
+
+        /// <summary>
+        /// Returns the directory object where to store documents for the given backup job.
+        /// </summary>
         private static async Task<CloudBlobDirectory> GetDirectoryAsync(CollectionBackupJob jobDef)
         {
             var client = await GetClientAsync(jobDef.ConnectionString);
-            var storage = CloudStorageAccount.Parse(AppSettings.Current.AzureWebJobsStorage);
+            var storage = CloudStorageAccount.Parse(jobDef.Storage);
             var blobs = storage.CreateCloudBlobClient();
             var container = blobs.GetContainerReference(jobDef.ContainerName.ToLower());
             await container.CreateIfNotExistsAsync();
@@ -137,11 +231,6 @@ namespace CosmosDbBackup
                 ;
 
             return dir;
-        }
-
-        private static async Task StoreDocumentAsync(CloudBlobContainer container, Document doc)
-        {
-
         }
 
     }

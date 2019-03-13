@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace CosmosDbBackup
+namespace CosmosDbBackup.FunctionParameters
 {
     /// <summary>
     /// A class that contains information about a collection backup job.
@@ -24,6 +24,11 @@ namespace CosmosDbBackup
         /// The collection link to the collection to back up.
         /// </summary>
         public Uri CollectionLink { get; set; }
+
+        /// <summary>
+        /// The connection string to the storage account to use to back up documents to.
+        /// </summary>
+        public string Storage { get; set; }
 
         /// <summary>
         /// The name of the container to store the documents in.

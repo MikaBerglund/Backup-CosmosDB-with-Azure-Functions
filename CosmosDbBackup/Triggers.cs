@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System.Net.Http;
 using System.Net;
+using CosmosDbBackup.Configuration;
 
 namespace CosmosDbBackup
 {
@@ -15,15 +16,17 @@ namespace CosmosDbBackup
         private const string FullBackupId = "805f7dee-d9d3-4e67-973c-2a977d9c50ac";
 
         [FunctionName(Names.FullBackupTimer)]
-        public static async Task FullBackupTimer([TimerTrigger("%FullBackupSchedule%")]TimerInfo timer, [OrchestrationClient]DurableOrchestrationClient client, ILogger log)
+        public static async Task FullBackupTimer([TimerTrigger("%CosmosBackup:FullBackupSchedule%")]TimerInfo timer, [OrchestrationClient]DurableOrchestrationClient client, ILogger log)
         {
             await StartFullBackupMain(client, log);
         }
 
 #if DEBUG
-        [FunctionName(nameof(TriggerFullBackup))]
-        public static async Task<HttpResponseMessage> TriggerFullBackup([HttpTrigger]HttpRequestMessage req, [OrchestrationClient]DurableOrchestrationClient client, ILogger log)
+        [FunctionName(Names.FullBackupHttpTrigger)]
+        public static async Task<HttpResponseMessage> FullBackupHttpTrigger([HttpTrigger]HttpRequestMessage req, [OrchestrationClient]DurableOrchestrationClient client, ILogger log)
         {
+            var config = AppSettings.Current;
+
             var status = await StartFullBackupMain(client, log);
             return req.CreateResponse(status ? HttpStatusCode.Accepted : HttpStatusCode.Conflict);
         }

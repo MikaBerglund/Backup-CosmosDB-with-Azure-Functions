@@ -1,4 +1,5 @@
-﻿using Microsoft.Azure.WebJobs;
+﻿using CosmosDbBackup.Configuration;
+using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -10,24 +11,20 @@ namespace CosmosDbBackup
     public static class Backups
     {
 
-
         [FunctionName(Names.FullBackupMain)]
         public static async Task FullBackupMain([OrchestrationTrigger]DurableOrchestrationContext context, [OrchestrationClient]DurableOrchestrationClient client, ILogger log)
         {
-            foreach(var cs in AppSettings.Current.ConnectionStrings)
+            var jobs = await context.CallActivityAsync<IEnumerable<FunctionParameters.CollectionBackupJob>>(Names.ResolveCollectionBackupJobs, null);
+
+            foreach(var job in jobs)
             {
-                var collections = await context.CallActivityAsync<IEnumerable<Uri>>(Names.EnumCollections, cs);
-
-                foreach (var coll in collections)
+                try
                 {
-                    var jobDef = new CollectionBackupJob(context.CurrentUtcDateTime)
-                    {
-                        ConnectionString = cs,
-                        CollectionLink = coll,
-                        ContainerName = AppSettings.Current.ContainerName
-                    };
-
-                    await context.CallActivityAsync(Names.BackupDocuments, jobDef);
+                    await context.CallActivityAsync(Names.BackupDocuments, job);
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, $"Error while backing up collection '{job.CollectionLink}'.");
                 }
             }
         }
