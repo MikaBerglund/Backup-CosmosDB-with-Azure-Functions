@@ -25,7 +25,7 @@ If you think there's something missing or want to add functionality, please cons
 Configuration
 -------------
 
-Read details about how to [configure](doc/configure.md) the application before deploying and running it.
+Read details about how to [configure](doc/configuration.md) the application before deploying and running it.
 
 
 Disclaimer
